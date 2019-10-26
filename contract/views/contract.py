@@ -32,7 +32,6 @@ def validate(request, project_id):
             "message": "Response is not success"
         })
         return JsonResponse(response.serialize())
-
     response = json.loads(response.content)
     if response["success"] != True:
         response = build_fail_response({
@@ -41,7 +40,11 @@ def validate(request, project_id):
         return JsonResponse(response.serialize())
 
     data = response["data"]
-    checklist_mask = int(data["checklist_mask"])
+    expected_checklist_mask = int(data["checklist_mask"])
+
+    # TODO: check threshold from checklist_mask
+
+    actual_checklist_mask = 0
     current_hash = data["tail_hash"]
     while current_hash != NO_DATA_HASH:
         url = build_URL_PORT("approval", current_hash)
@@ -60,9 +63,24 @@ def validate(request, project_id):
         response = json.loads(response.content)
         data = response["data"]
         current_hash = data["previous_hash"]
+
+        # query the employee to get the level
+        url = build_URL_PORT("employees", str(data["employee_id"]))
+        response = requests.get(url = url)
+        response = json.loads(response.content)
+        data = response["data"]
+        actual_checklist_mask |= (1 << (int(data["level_id"]) - 1))
         pass
 
-    response = build_success_response({
-        "message": "The chain is valid"
-    })
+    response = None
+    if expected_checklist_mask == actual_checklist_mask:
+        response = build_success_response({
+            "message": "The chain is valid"
+        })
+    else:
+        response = build_fail_response({
+            "message": "The chain is broken",
+            "expected_checklist_mask": expected_checklist_mask,
+            "actual_checklist_mask": actual_checklist_mask,
+        })
     return JsonResponse(response.serialize(), safe = False)
