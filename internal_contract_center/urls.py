@@ -1,6 +1,7 @@
-from django.contrib import admin
 from django.urls import path
 
+from contract.views import contract
+
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path("projects/<int:project_id>/validate", contract.validate, name = "validate"),
 ]

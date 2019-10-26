@@ -39,7 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     # Local
-    "contract.apps.SystemConfig",
+    "contract.apps.ContractConfig",
     "rest_framework",
 ]
 
