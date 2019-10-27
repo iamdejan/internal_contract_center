@@ -1,13 +1,25 @@
 from django.shortcuts import render
-from django.http import JsonResponse
-
-from rest_framework.decorators import api_view
 
 from contract.models import build_fail_response, build_success_response
 
-import requests, json
+import pika
+import requests
+import json
 
 NO_DATA_HASH = ''.join(["0" for i in range(128)])
+
+APPROVAL_SUCCESS = "APPROVAL_SUCCESS"
+APPROVAL_FAILED = "APPROVAL_FAILED"
+
+def _get_connection():
+    parameters = pika.URLParameters("amqp://localhost")
+    connection = pika.BlockingConnection(parameters)
+    channel = connection.channel()
+
+    # TODO :change this into for-loop
+    channel.queue_declare(APPROVAL_SUCCESS)
+    channel.queue_declare(APPROVAL_FAILED)
+    return (connection, channel)
 
 def build_URL_PORT(sub_url, id):
     URL = "http://localhost:"
@@ -19,22 +31,35 @@ def build_URL_PORT(sub_url, id):
     url += id
     return url
 
-@api_view(["GET"])
-def validate(request, project_id):
+def callback(ch, method, properties, body):
+    connection, channel = _get_connection()
 
-    url = build_URL_PORT("projects", str(project_id))
+    url = build_URL_PORT("projects", body.decode())
     response = requests.get(url = url)
     if response.status_code != 200:
         response = build_fail_response({
             "message": "Response is not success"
         })
-        return JsonResponse(response.serialize())
+        # TODO: publish
+        channel.basic_publish(
+            "",
+            routing_key = APPROVAL_FAILED,
+            body = json.dumps(response.serialize())
+        )
+        connection.close()
+        return
     response = json.loads(response.content)
     if response["success"] != True:
         response = build_fail_response({
             "message": "System is busy"
         })
-        return JsonResponse(response.serialize())
+        channel.basic_publish(
+            "",
+            routing_key = APPROVAL_FAILED,
+            body = json.dumps(response.serialize())
+        )
+        connection.close()
+        return
 
     data = response["data"]
     expected_checklist_mask = int(data["checklist_mask"])
@@ -52,7 +77,13 @@ def validate(request, project_id):
             response = build_fail_response({
                 "message": "Block is broken"
             })
-            return JsonResponse(response.serialize())
+            channel.basic_publish(
+                "",
+                routing_key = APPROVAL_FAILED,
+                body = json.dumps(response.serialize())
+            )
+            connection.close()
+            return
 
         # query the hash
         url = build_URL_PORT("approval", current_hash)
@@ -74,10 +105,20 @@ def validate(request, project_id):
         response = build_success_response({
             "message": "The chain is valid"
         })
+        channel.basic_publish(
+            "",
+            routing_key = APPROVAL_SUCCESS,
+            body = json.dumps(response.serialize())
+        )
     else:
         response = build_fail_response({
             "message": "The chain is broken",
             "expected_checklist_mask": expected_checklist_mask,
             "actual_checklist_mask": actual_checklist_mask,
         })
-    return JsonResponse(response.serialize(), safe = False)
+        channel.basic_publish(
+            "",
+            routing_key = APPROVAL_FAILED,
+            body = json.dumps(response.serialize())
+        )
+    connection.close()
