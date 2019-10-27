@@ -7,14 +7,11 @@ from contract.models import build_fail_response, build_success_response
 
 import requests, json
 
-URL = "http://localhost:"
-PORT = 8000
-
 NO_DATA_HASH = ''.join(["0" for i in range(128)])
 
 def build_URL_PORT(sub_url, id):
-    global URL
-    global PORT
+    URL = "http://localhost:"
+    PORT = 8000
     url = "%s%d" % (URL, PORT)
     url += "/system/"
     url += sub_url
