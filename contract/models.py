@@ -1,3 +1,5 @@
+from django.db import models
+
 class BaseResponse():
     success = False
     data = {}
@@ -20,3 +22,10 @@ def build_fail_response(data):
     response.success = False
     response.data = data
     return response
+
+class SmartContract(models.Model):
+    contract_code = models.CharField(max_length = 250, null = False, primary_key = True)
+    threshold = models.IntegerField(null = False)
+    description = models.CharField(max_length = 250)
+    def __str__(self):
+        return self.contract_code
