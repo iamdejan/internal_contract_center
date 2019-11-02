@@ -1,6 +1,7 @@
 from django.shortcuts import render
 
 from contract.models import build_fail_response, build_success_response
+from contract import constants
 
 import pika
 import requests
@@ -8,18 +9,7 @@ import json
 
 NO_DATA_HASH = ''.join(["0" for i in range(128)])
 
-APPROVAL_SUCCESS = "APPROVAL_SUCCESS"
-APPROVAL_FAILED = "APPROVAL_FAILED"
-
-def _get_connection():
-    parameters = pika.URLParameters("amqp://localhost")
-    connection = pika.BlockingConnection(parameters)
-    channel = connection.channel()
-
-    # TODO :change this into for-loop
-    channel.queue_declare(APPROVAL_SUCCESS)
-    channel.queue_declare(APPROVAL_FAILED)
-    return (connection, channel)
+contracts = {}
 
 def build_URL_PORT(sub_url, id):
     URL = "http://localhost:"
@@ -31,8 +21,23 @@ def build_URL_PORT(sub_url, id):
     url += id
     return url
 
-def callback(ch, method, properties, body):
-    connection, channel = _get_connection()
+def init_all_contracts():
+    global contracts
+    # TODO: get all contracts from DB
+    # for this time, we will mock
+    contracts[constants.SUCCESS] = "APPROVAL_SUCCESS"
+    contracts[constants.FAILED] = "APPROVAL_FAILED"
+    pass
+
+def init_queues(channel):
+    global contracts
+    for key in contracts:
+        channel.queue_declare(contracts[key])
+    pass
+
+def callback(channel, method, properties, body):
+    init_all_contracts()
+    init_queues(channel)
 
     url = build_URL_PORT("projects", body.decode())
     response = requests.get(url = url)
@@ -40,13 +45,11 @@ def callback(ch, method, properties, body):
         response = build_fail_response({
             "message": "Response is not success"
         })
-        # TODO: publish
         channel.basic_publish(
             "",
-            routing_key = APPROVAL_FAILED,
+            routing_key = contracts[constants.FAILED],
             body = json.dumps(response.serialize())
         )
-        connection.close()
         return
     response = json.loads(response.content)
     if response["success"] != True:
@@ -55,10 +58,9 @@ def callback(ch, method, properties, body):
         })
         channel.basic_publish(
             "",
-            routing_key = APPROVAL_FAILED,
+            routing_key = contracts[constants.FAILED],
             body = json.dumps(response.serialize())
         )
-        connection.close()
         return
 
     data = response["data"]
@@ -79,10 +81,9 @@ def callback(ch, method, properties, body):
             })
             channel.basic_publish(
                 "",
-                routing_key = APPROVAL_FAILED,
+                routing_key = contracts[constants.FAILED],
                 body = json.dumps(response.serialize())
             )
-            connection.close()
             return
 
         # query the hash
@@ -107,7 +108,7 @@ def callback(ch, method, properties, body):
         })
         channel.basic_publish(
             "",
-            routing_key = APPROVAL_SUCCESS,
+            routing_key = contracts[constants.SUCCESS],
             body = json.dumps(response.serialize())
         )
     else:
@@ -118,7 +119,7 @@ def callback(ch, method, properties, body):
         })
         channel.basic_publish(
             "",
-            routing_key = APPROVAL_FAILED,
+            routing_key = contracts[constants.FAILED],
             body = json.dumps(response.serialize())
         )
-    connection.close()
+    pass
