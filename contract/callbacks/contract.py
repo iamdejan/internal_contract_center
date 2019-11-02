@@ -33,7 +33,7 @@ def init_all_contracts():
 def init_queues(channel):
     global contracts
     for key in contracts:
-        channel.queue_declare(contracts[key])
+        channel.queue_declare(key)
     pass
 
 def popcount(number):
