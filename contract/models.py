@@ -24,6 +24,8 @@ def build_fail_response(data):
     return response
 
 class SmartContract(models.Model):
+    class Meta:
+        db_table = "system_smartcontract"
     contract_code = models.CharField(max_length = 250, null = False, primary_key = True)
     threshold = models.IntegerField(null = False)
     description = models.CharField(max_length = 250)
