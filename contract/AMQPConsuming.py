@@ -2,6 +2,7 @@ import threading
 
 import pika
 
+from . import constants
 from .callbacks.contract import callback
 
 class AMQPConsuming(threading.Thread):
@@ -11,13 +12,14 @@ class AMQPConsuming(threading.Thread):
         return pika.BlockingConnection(parameters)
 
     def run(self):
+        # start
         connection = self._get_connection()
         channel = connection.channel()
 
-        channel.queue_declare(queue = "VALIDATE_CHAIN")
+        channel.queue_declare(queue = constants.VALIDATE_CHAIN)
         channel.basic_qos(prefetch_count=1)
         channel.basic_consume(
-            queue = "VALIDATE_CHAIN",
+            queue = constants.VALIDATE_CHAIN,
             auto_ack = True,
             on_message_callback = callback
         )

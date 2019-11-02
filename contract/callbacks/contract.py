@@ -1,6 +1,7 @@
 from django.shortcuts import render
 
-from contract.models import build_fail_response, build_success_response, SmartContract
+from contract.models import build_fail_response, build_success_response
+from contract.models import SmartContract
 from contract import constants
 
 import pika
@@ -23,7 +24,6 @@ def build_URL_PORT(sub_url, id):
 
 def init_all_contracts():
     global contracts
-    # TODO: get all contracts from DB
     db_contracts = SmartContract.objects.all()
     for contract in db_contracts:
         contracts[contract.contract_code] = contract
@@ -35,6 +35,12 @@ def init_queues(channel):
     for key in contracts:
         channel.queue_declare(contracts[key])
     pass
+
+def popcount(number):
+    popcounts = [0 for i in range(number + 1)]
+    for i in range(number + 1):
+        popcounts[i] = popcounts[i >> 1] + (i & 1 == 1)
+    return popcounts[number]
 
 def callback(channel, method, properties, body):
     init_all_contracts()
@@ -65,9 +71,20 @@ def callback(channel, method, properties, body):
         return
 
     data = response["data"]
-    expected_checklist_mask = int(data["checklist_mask"])
+    checklist_mask = int(data["checklist_mask"])
 
-    # TODO: check threshold from checklist_mask
+    success_contract = contracts[constants.SUCCESS]
+    threshold = success_contract.threshold
+    if popcount(checklist_mask) < threshold:
+        response = build_fail_response({
+            "message": "Approval below threshold"
+        })
+        channel.basic_publish(
+            "",
+            routing_key = constants.FAILED,
+            body = json.dumps(response.serialize())
+        )
+        return
 
     actual_checklist_mask = 0
     current_hash = data["tail_hash"]
@@ -103,6 +120,7 @@ def callback(channel, method, properties, body):
         pass
 
     response = None
+    expected_checklist_mask = checklist_mask
     if expected_checklist_mask == actual_checklist_mask:
         response = build_success_response({
             "message": "The chain is valid"
