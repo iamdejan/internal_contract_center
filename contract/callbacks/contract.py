@@ -1,6 +1,6 @@
 from django.shortcuts import render
 
-from contract.models import build_fail_response, build_success_response
+from contract.models import build_fail_response, build_success_response, SmartContract
 from contract import constants
 
 import pika
@@ -24,9 +24,10 @@ def build_URL_PORT(sub_url, id):
 def init_all_contracts():
     global contracts
     # TODO: get all contracts from DB
-    # for this time, we will mock
-    contracts[constants.SUCCESS] = "APPROVAL_SUCCESS"
-    contracts[constants.FAILED] = "APPROVAL_FAILED"
+    db_contracts = SmartContract.objects.all()
+    for contract in db_contracts:
+        contracts[contract.contract_code] = contract
+        pass
     pass
 
 def init_queues(channel):
@@ -47,7 +48,7 @@ def callback(channel, method, properties, body):
         })
         channel.basic_publish(
             "",
-            routing_key = contracts[constants.FAILED],
+            routing_key = constants.FAILED,
             body = json.dumps(response.serialize())
         )
         return
@@ -58,7 +59,7 @@ def callback(channel, method, properties, body):
         })
         channel.basic_publish(
             "",
-            routing_key = contracts[constants.FAILED],
+            routing_key = constants.FAILED,
             body = json.dumps(response.serialize())
         )
         return
@@ -81,7 +82,7 @@ def callback(channel, method, properties, body):
             })
             channel.basic_publish(
                 "",
-                routing_key = contracts[constants.FAILED],
+                routing_key = constants.FAILED,
                 body = json.dumps(response.serialize())
             )
             return
@@ -108,7 +109,7 @@ def callback(channel, method, properties, body):
         })
         channel.basic_publish(
             "",
-            routing_key = contracts[constants.SUCCESS],
+            routing_key = constants.SUCCESS,
             body = json.dumps(response.serialize())
         )
     else:
@@ -119,7 +120,7 @@ def callback(channel, method, properties, body):
         })
         channel.basic_publish(
             "",
-            routing_key = contracts[constants.FAILED],
+            routing_key = constants.FAILED,
             body = json.dumps(response.serialize())
         )
     pass
