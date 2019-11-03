@@ -12,16 +12,6 @@ NO_DATA_HASH = ''.join(["0" for i in range(128)])
 
 contracts = {}
 
-def build_URL_PORT(sub_url, id):
-    URL = "http://localhost:"
-    PORT = 8000
-    url = "%s%d" % (URL, PORT)
-    url += "/system/"
-    url += sub_url
-    url += "/"
-    url += id
-    return url
-
 def init_all_contracts():
     global contracts
     db_contracts = SmartContract.objects.all()
@@ -42,12 +32,26 @@ def popcount(number):
         popcounts[i] = popcounts[i >> 1] + (i & 1 == 1)
     return popcounts[number]
 
+def fire_API_call(sub_url, id, *args):
+    URL = "http://localhost:"
+    PORT = 8000
+    url = "%s%d" % (URL, PORT)
+    url += "/system/"
+    url += sub_url
+    url += "/"
+    url += id
+    for suffix in args:
+        url += suffix
+        pass
+
+    response = requests.get(url = url)
+    return response
+
 def callback(channel, method, properties, body):
     init_all_contracts()
     init_queues(channel)
 
-    url = build_URL_PORT("projects", body.decode())
-    response = requests.get(url = url)
+    response = fire_API_call("projects", body.decode())
     if response.status_code != 200:
         response = build_fail_response({
             "message": "Response is not success"
@@ -89,9 +93,7 @@ def callback(channel, method, properties, body):
     actual_checklist_mask = 0
     current_hash = data["tail_hash"]
     while current_hash != NO_DATA_HASH:
-        url = build_URL_PORT("approval", current_hash)
-        url +="/validate"
-        response = requests.get(url = url)
+        response = fire_API_call("approval", current_hash, "/validate")
         response = json.loads(response.content)
         if response["success"] != True:
             response = build_fail_response({
@@ -105,15 +107,13 @@ def callback(channel, method, properties, body):
             return
 
         # query the hash
-        url = build_URL_PORT("approval", current_hash)
-        response = requests.get(url = url)
+        response = fire_API_call("approval", current_hash)
         response = json.loads(response.content)
         data = response["data"]
         current_hash = data["previous_hash"]
 
         # query the employee to get the level
-        url = build_URL_PORT("employees", str(data["employee_id"]))
-        response = requests.get(url = url)
+        response = fire_API_call("employees", str(data["employee_id"]))
         response = json.loads(response.content)
         data = response["data"]
         actual_checklist_mask |= (1 << (int(data["level_id"]) - 1))
